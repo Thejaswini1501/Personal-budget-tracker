@@ -1,83 +1,63 @@
 import streamlit as st
-import json
+import matplotlib.pyplot as plt
+import datetime
 
-# File to store data
-DATA_FILE = "budget_data.json"
+class BudgetTracker:
+    def __init__(self):
+        self.expenses = []
+        self.budget_limit = 0
 
-# Load existing data or initialize an empty list
-def load_data():
-    try:
-        with open(DATA_FILE, "r") as file:
-            return json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+    def set_budget_limit(self, limit):
+        self.budget_limit = limit
 
-# Save data
-def save_data(data):
-    with open(DATA_FILE, "w") as file:
-        json.dump(data, file, indent=4)
+    def add_expense(self, amount, category):
+        date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.expenses.append({'amount': amount, 'category': category, 'date': date})
+        self.check_budget()
 
-# Add a transaction
-def add_transaction(date, category, amount, trans_type):
-    data = load_data()
-    transaction = {"date": date, "category": category, "amount": amount, "type": trans_type}
-    data.append(transaction)
-    save_data(data)
-    st.success("Transaction added successfully!")
-
-# View transactions
-def view_transactions():
-    data = load_data()
-    if data:
-        st.write("### Transaction History")
-        st.table(data)
-    else:
-        st.info("No transactions recorded yet.")
-
-# Get balance
-def get_balance():
-    data = load_data()
-    income = sum(trans["amount"] for trans in data if trans["type"] == "Income")
-    expense = sum(trans["amount"] for trans in data if trans["type"] == "Expense")
-    balance = income - expense
+    def check_budget(self):
+        total_expense = sum(expense['amount'] for expense in self.expenses)
+        if total_expense > self.budget_limit:
+            st.warning("⚠️ You have exceeded your budget limit!")
     
-    st.write("### Financial Summary")
-    st.write(f"*Total Income:* ${income:.2f}")
-    st.write(f"*Total Expenses:* ${expense:.2f}")
-    st.write(f"*Current Balance:* ${balance:.2f}")
+    def plot_expenses(self):
+        if not self.expenses:
+            st.info("No expenses to plot.")
+            return
 
-# Delete transaction
-def delete_transaction(index):
-    data = load_data()
-    if 0 <= index < len(data):
-        deleted = data.pop(index)
-        save_data(data)
-        st.success(f"Deleted transaction: {deleted}")
-    else:
-        st.error("Invalid transaction index.")
+        categories = [expense['category'] for expense in self.expenses]
+        amounts = [expense['amount'] for expense in self.expenses]
 
-# Streamlit UI
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.bar(categories, amounts, color='skyblue')
+        ax.set_title('Expense Analysis by Category')
+        ax.set_xlabel('Category')
+        ax.set_ylabel('Amount Spent ($)')
+        plt.xticks(rotation=45, ha='right')
+        st.pyplot(fig)
+
+# Initialize the BudgetTracker
+tracker = BudgetTracker()
+
 st.title("💰 Personal Budget Tracker")
+st.sidebar.header("Set Budget Limit")
+budget = st.sidebar.number_input("Enter your budget limit", min_value=0.0, step=10.0)
+tracker.set_budget_limit(budget)
 
-# Add Transaction
-st.sidebar.header("Add New Transaction")
-date = st.sidebar.text_input("Enter date (YYYY-MM-DD)")
-category = st.sidebar.text_input("Enter category")
-amount = st.sidebar.number_input("Enter amount", min_value=0.01)
-trans_type = st.sidebar.selectbox("Select type", ["Income", "Expense"])
-if st.sidebar.button("Add Transaction"):
-    add_transaction(date, category, amount, trans_type)
+st.sidebar.header("Add New Expense")
+amount = st.sidebar.number_input("Amount", min_value=0.0, step=1.0)
+category = st.sidebar.text_input("Category")
+if st.sidebar.button("Add Expense"):
+    if category and amount > 0:
+        tracker.add_expense(amount, category)
+        st.success(f"Added ${amount} for {category}")
+    else:
+        st.error("Please enter valid amount and category.")
 
-# View Transactions
-view_transactions()
+st.header("📊 Expense Summary")
+if tracker.expenses:
+    for expense in tracker.expenses:
+        st.write(f"{expense['date']} - ${expense['amount']} - {expense['category']}")
 
-# Display Balance
-get_balance()
-
-# Delete Transaction
-st.sidebar.header("Delete Transaction")
-data = load_data()
-if data:
-    index = st.sidebar.number_input("Enter transaction index to delete", min_value=0, max_value=len(data)-1, step=1)
-    if st.sidebar.button("Delete Transaction"):
-        delete_transaction(index)
+st.header("📈 Expense Chart")
+tracker.plot_expenses()
